@@ -9,6 +9,7 @@ from quickbrain.sources import Source, SearchResult
 from quickbrain.sources.exa_search import ExaSearch
 from quickbrain.sources.brave_search import BraveSearch
 from quickbrain.sources.hackernews import HackerNews
+from quickbrain.sources.reddit import Reddit
 from quickbrain.scorer.relevance import score_relevance
 
 
@@ -16,8 +17,9 @@ def get_sources() -> list[Source]:
     """Build list of available sources based on config."""
     sources: list[Source] = []
 
-    # HN is always available (free, no API key)
+    # Always available (free, no API key)
     sources.append(HackerNews())
+    sources.append(Reddit())
 
     # Exa — most impactful source, add if configured
     exa = ExaSearch()

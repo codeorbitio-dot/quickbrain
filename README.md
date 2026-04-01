@@ -12,10 +12,10 @@ Existing research agents (DeerFlow, last30days) go deep — which is great, but 
 ## What QuickBrain Does
 
 ```
-You: "Apa update terbaru LLM open source minggu ini?"
-→ Searches Exa + Reddit + HN + Web (parallel, ~5s)
-→ Synthesizes 3-5 key points with real citations (~5s)
-You: "Buatkan summary dari poin ke-2"
+You: "latest open source LLM updates"
+→ Searches Reddit, HN, Exa, Brave (parallel, ~5s)
+→ Synthesizes 5-7 key points with real citations (~5s)
+You: "action — open issue on repo X"
 → Done.
 ```
 
@@ -24,47 +24,122 @@ You: "Buatkan summary dari poin ke-2"
 ```bash
 pip install -e .
 
-# Set at minimum one search API key
+# Set at minimum one search API key (for best results)
 export EXA_API_KEY="sk-..."      # free 1000/mo at exa.ai
 # Optional: BRAVE_API_KEY="..."   # free 2000/mo
 
-python -m quickbrain.search "latest open source LLM"
+# Reddit and HN work out of the box — no API keys needed!
+python -m quickbrain "latest open source LLM"
 ```
-
-Or use as a skill in OpenClaw / Hermes / Claude Code by dropping it in your skills directory.
-
-## Design Principles
-
-- **Fast first.** Aim for <30s end-to-end. Depth is secondary.
-- **One key to start.** Exa free tier covers most use cases. Additional sources are opt-in.
-- **No GPU needed.** Runs on a $5 VPS or your laptop.
-- **Research → Action.** After getting results, pipe them into actions: open a GitHub issue, send an email, schedule a reminder.
 
 ## Architecture
 
 ```
-src/quickbrain/
-├── __init__.py
-├── cli.py              # Entry point (python -m quickbrain)
-├── search.py           # Parallel multi-source search orchestrator
-├── synthesize.py       # LLM-aware summarizer
-├── sources/            # Pluggable data sources
-│   ├── exa_search.py   # Exa AI semantic search
-│   ├── brave_search.py # Brave web search
-│   ├── reddit.py       # Reddit hot/top posts
-│   └── hackernews.py   # Hacker News stories
-├── scorer/             # Result quality scoring
-│   ├── relevance.py    # Score by relevance to query
-│   └── authority.py    # Score by source authority
-└── action/             # Post-research actions
-    ├── base.py         # Action interface
-    ├── github.py       # Open GH issues/PRs
-    └── notify.py       # Send via WhatsApp/email/etc
+                    ┌──────────────┐
+                    │   CLI / API   │
+                    └──────┬───────┘
+                           │
+              ┌────────────▼────────────┐
+              │     search.py           │  ← parallel orchestrator
+              │   (asyncio.gather)      │
+              └────┬───┬───┬───┬───────┘
+                   │   │   │   │
+      ┌────────────┤   │   │   ├────────────┐
+      │            │   │   │   │            │
+  ┌───▼───┐  ┌────▼──┐│ ┌─▼───┐│ ┌────────▼┐│
+  │ Reddit │  │  HN   ││ │ Exa ││ │ Brave   ││
+  │ (free) │  │(free) │ │(API) │ │ (API)   │ │
+  └───┬───┘  └────┬──┘│ └─┬───┘│ └────────┘││
+      │           │   │   │   │             │
+      └───────────┼───┼───┘   └─────────────┘
+                  │   │
+              ┌───▼───▼──┐
+              │ scorer/   │  ← relevance scoring
+              └─────┬────┘
+                    │
+              ┌─────▼──────┐
+              │ synthesize │  ← template or LLM summary
+              └─────┬──────┘
+                    │
+              ┌─────▼──────┐
+              │ action/     │  ← GitHub, webhook, notify
+              └────────────┘
 ```
 
-## Adding Sources
+## Sources
 
-Implement `Source` interface and register in `sources/__init__.py`. Each source runs in parallel, results merge into a unified pipeline.
+| Source | API Key? | Notes |
+|---|---|---|
+| **Reddit** | No | Public JSON, top posts & comments |
+| **Hacker News** | No | Algolia search API |
+| **Exa AI** | Yes (free tier 1000/mo) | Semantic search — most impactful |
+| **Brave Search** | Yes (free tier 2000/mo) | Web search backup |
+
+## Actions
+
+After getting results, pipe them into actions:
+
+```python
+from quickbrain.action.github import GitHubIssue
+from quickbrain.action.notify import WebhookNotify
+
+# Open a GitHub issue
+issue = GitHubIssue(repo="owner/repo")
+await issue.execute(
+    title="Research: LLM updates",
+    body="Summary:\n\n1. New model released...\n2. ..."
+)
+
+# Send to webhook (Discord/Slack)
+notify = WebhookNotify(url="https://hooks.slack.com/...")
+await notify.execute(summary="Research results attached")
+```
+
+## CLI Usage
+
+```bash
+# Basic search (Reddit + HN, no config needed)
+quickbrain "latest RAG best practices"
+
+# With Exa (set EXA_API_KEY first)
+quickbrain "new AI video generation tools 2026"
+```
+
+### Example Output
+
+```
+Found 23 unique results in 6.2s
+
+Results for: latest open source LLM
+
+1. **Sakana AI releases AI Scientist v2** [0.92]
+   The AI Scientist-v2: Workshop-Level Automated Scientific Discovery via Agentic Tree Search
+   https://github.com/SakanaAI/AI-Scientist-v2
+   (points: 847, comments: 231)
+
+2. **NousResearch open-sources Hermes 3 LLM**
+   New 70B parameter model with strong tool-calling...
+   https://nousresearch.com/hermes-3
+
+Sources: reddit, hackernews (23 total results)
+```
+
+## Adding Custom Sources
+
+Implement the `Source` interface and register in `search.py`:
+
+```python
+from quickbrain.sources import Source, SearchResult
+
+class MySource(Source):
+    @property
+    def name(self) -> str:
+        return "mysource"
+
+    async def search(self, query: str, **kwargs) -> list[SearchResult]:
+        # scrape or fetch here
+        return [SearchResult(...)]
+```
 
 ## License
 
