@@ -10,7 +10,9 @@ from quickbrain.sources.exa_search import ExaSearch
 from quickbrain.sources.brave_search import BraveSearch
 from quickbrain.sources.hackernews import HackerNews
 from quickbrain.sources.reddit import Reddit
+from quickbrain.sources.github_trending import GitHubTrending
 from quickbrain.scorer.confidence import score_with_confidence
+from quickbrain.dedup import smart_dedup
 
 
 def get_sources() -> list[Source]:
@@ -20,6 +22,7 @@ def get_sources() -> list[Source]:
     # Always available (free, no API key)
     sources.append(HackerNews())
     sources.append(Reddit())
+    sources.append(GitHubTrending())
 
     # Exa — most impactful source, add if configured
     exa = ExaSearch()
@@ -36,7 +39,7 @@ def get_sources() -> list[Source]:
 
 async def search(query: str, num_results: int = 10) -> list[SearchResult]:
     """
-    Run parallel search across all available sources, combine, score, return.
+    Run parallel search across all available sources, combine, dedupe, score, return.
     """
     sources = get_sources()
     if not sources:
@@ -53,13 +56,8 @@ async def search(query: str, num_results: int = 10) -> list[SearchResult]:
             continue  # skip failed sources, don't fail the whole search
         results.extend(raw)
 
-    # Deduplicate by URL
-    seen_urls = set()
-    unique = []
-    for r in results:
-        if r.url not in seen_urls:
-            seen_urls.add(r.url)
-            unique.append(r)
+    # Smart dedup: URL + content similarity
+    results = smart_dedup(results)
 
     # Score with embedding + confidence; falls back to keyword overlap internally
-    return score_with_confidence(query, unique)
+    return score_with_confidence(query, results)
