@@ -33,11 +33,20 @@ class HackerNews(Source):
 
         results = []
         for hit in data.get("hits", []):
+            title = hit.get("title", "") or ""
+            story_text = hit.get("story_text", "") or ""
+            # Skip link-only posts with no title and no text
+            if not title and not story_text:
+                continue
+
+            display_title = title or (story_text[:80] + "..." if len(story_text) > 80 else story_text[:80])
             story_url = hit.get("url", "") or f"https://news.ycombinator.com/item?id={hit.get('objectID')}"
+            snippet = story_text[:300] if story_text else ""
+
             results.append(SearchResult(
-                title=hit.get("title", ""),
+                title=display_title,
                 url=story_url,
-                snippet=hit.get("story_text", "")[:300] or "",
+                snippet=snippet,
                 source="hackernews",
                 published=hit.get("created_at", ""),
                 metadata={
