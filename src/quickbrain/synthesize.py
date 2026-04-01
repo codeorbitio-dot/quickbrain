@@ -8,6 +8,17 @@ from __future__ import annotations
 from quickbrain.sources import SearchResult
 
 
+def _format_score(r: SearchResult) -> str:
+    """Format the score display — prefer confidence if available."""
+    confidence = getattr(r, "confidence", None)
+    if confidence:
+        conf = confidence.get("confidence", r.score)
+        return f"[{conf:.2f}]"
+    if r.score and r.score > 0:
+        return f"[{r.score:.2f}]"
+    return ""
+
+
 def synthesize_template(results: list[SearchResult], query: str, top_n: int = 5) -> str:
     """Generate a structured summary without an LLM. Useful as a zero-cost fallback."""
     if not results:
@@ -16,9 +27,13 @@ def synthesize_template(results: list[SearchResult], query: str, top_n: int = 5)
     lines = [f"Results for: {query}\n"]
     
     for i, r in enumerate(results[:top_n], 1):
-        score_str = f"[{r.score:.2f}]" if r.score > 0 else ""
+        score_str = _format_score(r)
         lines.append(f"{i}. **{r.title}** {score_str}")
-        lines.append(f"   {r.snippet[:200]}")
+        # Clean up HTML-ish entities and whitespace for cleaner display
+        import re
+        clean = re.sub(r"&#x[0-9a-fA-F]+;|&amp;|&lt;|&gt;", "", r.snippet)
+        clean = re.sub(r"\s+", " ", clean).strip()
+        lines.append(f"   {clean[:200]}")
         lines.append(f"   {r.url}")
         if r.metadata:
             meta = ", ".join(f"{k}: {v}" for k, v in r.metadata.items())

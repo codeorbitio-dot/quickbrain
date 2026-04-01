@@ -17,6 +17,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+semantic = [
+    "numpy>=1.24",
+    "sentence-transformers>=2.2.0",
+]
 dev = ["pytest>=7.0", "pytest-asyncio", "ruff"]
 
 [project.scripts]

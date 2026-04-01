@@ -10,7 +10,7 @@ from quickbrain.sources.exa_search import ExaSearch
 from quickbrain.sources.brave_search import BraveSearch
 from quickbrain.sources.hackernews import HackerNews
 from quickbrain.sources.reddit import Reddit
-from quickbrain.scorer.relevance import score_relevance
+from quickbrain.scorer.confidence import score_with_confidence
 
 
 def get_sources() -> list[Source]:
@@ -61,5 +61,5 @@ async def search(query: str, num_results: int = 10) -> list[SearchResult]:
             seen_urls.add(r.url)
             unique.append(r)
 
-    # Score and sort
-    return score_relevance(unique, query)
+    # Score with embedding + confidence; falls back to keyword overlap internally
+    return score_with_confidence(query, unique)
